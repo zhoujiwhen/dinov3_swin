@@ -1,0 +1,102 @@
+MODEL:
+  META_ARCHITECTURE: SSLMetaArch
+
+# 使用 ViT-Small 进行快速训练
+student:
+  arch: swin_small
+  patch_size: 4
+  drop_path_rate: 0.1
+  qkv_bias: true
+  # proj_bias: true
+  # ffn_bias: true
+  norm_layer: layernorm
+
+# 训练超参数（针对小数据集优化）
+optim:
+  epochs: 10
+  batch_size_per_gpu: 16
+  lr: 0.0001
+  warmup_epochs: 2
+  layerwise_decay: 0.9
+  clip_grad: 3.0
+  weight_decay: 0.04
+  weight_decay_end: 0.4
+
+# DINO 损失配置
+dino:
+  loss_weight: 1.0
+  koleo_loss_weight: 0.1
+  head_n_prototypes: 4096
+  head_bottleneck_dim: 256
+  head_hidden_dim: 2048
+  head_nlayers: 3
+
+# iBOT 损失（可禁用加速训练）
+ibot:
+  loss_weight: 1.0
+  separate_head: true
+  mask_ratio_min_max:
+  - 0.1
+  - 0.5
+  mask_random_circular_shift: false
+  force_masking_even_with_zero_weight: false
+  head_n_prototypes: 4096
+  head_bottleneck_dim: 384
+  head_norm_last_layer: false
+  head_nlayers: 3
+  head_hidden_dim: 2048
+
+# Gram 损失（禁用）
+gram:
+  use_loss: false
+
+# 数据增强
+crops:
+  global_crops_scale: [0.5, 1.0]
+  local_crops_number: 8
+  local_crops_scale: [0.05, 0.32]
+  global_crops_size: 448
+  local_crops_size: 224
+  # EuroSAT 使用标准 ImageNet 归一化（RGB 图像）
+  rgb_mean: [0.485, 0.456, 0.406]
+  rgb_std: [0.229, 0.224, 0.225]
+  horizontal_flips: true
+
+# 训练配置
+train:
+  dataset_path: "ImageNet:split=TRAIN:root=/mnt/qh2-nas3/00-model/00-wrs/dinov3_workspace/data_eurosat_train:extra=/mnt/qh2-nas3/00-model/00-wrs/dinov3_workspace/data_eurosat_train/extra"
+  # output_dir: "/mnt/qh2-nas3/00-model/00-wrs/dinov3_workspace/output_eurosat_result_swin_ibot"
+  output_dir: "/mnt/qh2-nas3/00-model/00-wrs/dinov3_workspace/output_eurosat_result_swin_ibot_maskembstd_5e-4"
+  #saveckp_freq: 100
+  num_workers: 0
+  OFFICIAL_EPOCH_LENGTH: 1350  # EuroSAT 训练集 21600 / 64 ≈ 338
+  seed: 42
+  cache_dataset: true
+  centering: sinkhorn_knopp
+  batch_size_per_gpu: 32
+  checkpointing: true
+
+  
+  
+
+# 评估配置
+evaluation:
+  eval_period_iterations: 500
+
+# 精度配置
+compute_precision:
+  param_dtype: bf16
+  reduce_dtype: fp32
+  sharding_strategy: SHARD_GRAD_OP
+
+teacher:
+  momentum_teacher: 0.996
+  final_momentum_teacher: 1.0
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 10
+
+checkpointing:
+    checkpointing:
+    period: 3750
+    max_to_keep: 10

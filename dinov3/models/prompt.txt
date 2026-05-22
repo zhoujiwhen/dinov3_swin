@@ -1,0 +1,6 @@
+在/mnt/ht2-nas2/00-model/00-wrs/dinov3_workspace/code_revised/dinov3-main/dinov3/models
+下的swintransformer.py中 写一个main函数 里面是测试用例 测试SwinTransformer的forward_list函数
+输入是length 为2的List[Tensor]
+第一个Tensor的维度是128, 3, 224, 224
+第二个Tensor的维度是512, 3, 96, 96
+写完先不运行
