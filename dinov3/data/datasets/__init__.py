@@ -5,6 +5,7 @@
 
 from .ade20k import ADE20K
 from .coco_captions import CocoCaptions
+from .flat_jpg import FlatJPGDataset  # modified by zhoujiwen
 from .image_net import ImageNet
 from .image_net_22k import ImageNet22k
 from .nyu import NYU

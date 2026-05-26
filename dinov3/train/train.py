@@ -4,6 +4,7 @@
 # the terms of the DINOv3 License Agreement.
 
 import argparse
+import csv
 import copy
 import gc
 import logging
@@ -40,6 +41,7 @@ from dinov3.data import (
 from dinov3.logging import MetricLogger, setup_logging
 from dinov3.train.cosine_lr_scheduler import CosineScheduler, linear_warmup_cosine_decay
 from dinov3.train.multidist_meta_arch import MultiDistillationMetaArch
+from dinov3.train.feature_distill_meta_arch import FeatureDistillationMetaArch  # modified by zhoujiwen
 from dinov3.train.ssl_meta_arch import SSLMetaArch
 from dinov3.models.swin_transformer import SwinTransformer
 
@@ -387,6 +389,39 @@ def build_multi_resolution_data_loader_from_cfg(
     return data_loader
 
 
+def build_feature_val_data_loader_from_cfg(cfg, model):  # modified by zhoujiwen
+    cfg_val = copy.deepcopy(cfg)
+    cfg_val.train.dataset_path = cfg.feature_distill.val_dataset_path
+    dataset = make_dataset(dataset_str=cfg_val.train.dataset_path, transform=model.build_data_augmentation_dino(cfg_val), target_transform=lambda _: ())
+    img_size = cfg_val.crops.global_crops_size
+    n_tokens = (img_size // (cfg_val.student.patch_size * 8)) ** 2
+    collate_fn = partial(
+        collate_data_and_cast,
+        mask_ratio_tuple=cfg_val.ibot.mask_ratio_min_max,
+        mask_probability=cfg_val.ibot.mask_sample_probability,
+        dtype={"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[cfg_val.compute_precision.param_dtype],
+        n_tokens=n_tokens,
+        mask_generator=MaskingGenerator(input_size=(img_size // (cfg_val.student.patch_size * 8), img_size // (cfg_val.student.patch_size * 8)), max_num_patches=0.5 * n_tokens),
+        random_circular_shift=cfg_val.ibot.mask_random_circular_shift,
+    )
+    return make_data_loader(dataset=dataset, batch_size=cfg_val.train.batch_size_per_gpu, num_workers=cfg_val.train.num_workers, sampler_type=SamplerType.EPOCH, drop_last=True, collate_fn=collate_fn)
+
+
+@torch.no_grad()
+def do_feature_validation(model, data_loader, max_batches):  # modified by zhoujiwen
+    vals = []
+    model.eval()
+    for i, data in enumerate(data_loader):
+        if i >= max_batches:
+            break
+        loss, _ = model.validation_step(data)
+        vals.append(loss.detach())
+    model.train()
+    val = torch.stack(vals).mean() if vals else torch.tensor(float("inf"), device="cuda")
+    torch.distributed.all_reduce(val, op=torch.distributed.ReduceOp.AVG, group=distributed.get_process_subgroup())
+    return val
+
+
 def do_train(cfg, model, resume=False):
     process_subgroup = distributed.get_process_subgroup()
     ckpt_dir = Path(cfg.train.output_dir, "ckpt").expanduser()
@@ -434,6 +469,13 @@ def do_train(cfg, model, resume=False):
         model=model,
         start_iter=start_iter,
     )
+    feature_distill_enabled = cfg.MODEL.META_ARCHITECTURE == "FeatureDistillationMetaArch"  # modified by zhoujiwen
+    val_loader = build_feature_val_data_loader_from_cfg(cfg, model) if feature_distill_enabled else None
+    best_val_loss, bad_val_count = float("inf"), 0
+    csv_path = os.path.join(cfg.train.output_dir, "step_losses.csv")
+    if feature_distill_enabled and distributed.is_subgroup_main_process() and not os.path.exists(csv_path):
+        with open(csv_path, "w", newline="") as f:
+            csv.writer(f).writerow(["step", "total_loss", "val_loss"])
 
     # Metric logging
     logger.info("Starting training from iteration %d", start_iter)
@@ -557,6 +599,22 @@ def do_train(cfg, model, resume=False):
         metric_logger.update(mom=mom)
         metric_logger.update(last_layer_lr=last_layer_lr)
         metric_logger.update(total_loss=total_loss, **metrics_dict)
+        val_loss_for_csv = ""
+        if feature_distill_enabled and (iteration + 1) % cfg.feature_distill.val_period_iterations == 0:
+            val_loss = do_feature_validation(model, val_loader, cfg.feature_distill.val_max_batches)
+            val_loss_for_csv = float(val_loss.item())
+            metric_logger.update(val_loss=val_loss)
+            if val_loss_for_csv < best_val_loss:
+                best_val_loss, bad_val_count = val_loss_for_csv, 0
+                save_checkpoint(ckpt_dir / "best", iteration=iteration, model=model, optimizer=optimizer, overwrite=True, process_group=process_subgroup)
+            else:
+                bad_val_count += 1
+            if bad_val_count >= cfg.feature_distill.early_stopping_patience:
+                logger.info(f"Early stopping at iteration {iteration}: best val loss {best_val_loss:.6f}")
+                break
+        if feature_distill_enabled and distributed.is_subgroup_main_process():
+            with open(csv_path, "a", newline="") as f:
+                csv.writer(f).writerow([iteration, float(total_loss.item()), val_loss_for_csv])
 
         # Submit evaluation jobs
         if (
@@ -611,6 +669,7 @@ def main(argv=None):
     meta_arch = {
         "SSLMetaArch": SSLMetaArch,
         "MultiDistillationMetaArch": MultiDistillationMetaArch,
+        "FeatureDistillationMetaArch": FeatureDistillationMetaArch,  # modified by zhoujiwen
     }.get(cfg.MODEL.META_ARCHITECTURE, None)
     if meta_arch is None:
         raise ValueError(f"Unknown MODEL.META_ARCHITECTURE {cfg.MODEL.META_ARCHITECTURE}")

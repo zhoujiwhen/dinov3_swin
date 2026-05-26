@@ -1154,14 +1154,14 @@ def swin_small(window_size=7, **kwargs):
 def swin_base(window_size=7, **kwargs):
     model = SwinTransformer(
         window_size=window_size, embed_dim=128, depths=[2, 2, 18, 2], num_heads=[4, 8, 16, 32],
-        mlp_ratio=4, qkv_bias=True, drop_path_rate=kwargs.pop('drop_path_rate', 0.2), **kwargs)
+        mlp_ratio=4, qkv_bias=kwargs.pop('qkv_bias', True), drop_path_rate=kwargs.pop('drop_path_rate', 0.2), **kwargs)  # modified by zhoujiwen
     return model
 
 @register_model
 def swin_large(window_size=7, **kwargs):
     model = SwinTransformer(
         window_size=window_size, embed_dim=192, depths=[2, 2, 18, 2], num_heads=[6, 12, 24, 48],
-        mlp_ratio=4, qkv_bias=True, drop_path_rate=kwargs.pop('drop_path_rate', 0.2), **kwargs)
+        mlp_ratio=4, qkv_bias=kwargs.pop('qkv_bias', True), drop_path_rate=kwargs.pop('drop_path_rate', 0.2), **kwargs)  # modified by zhoujiwen
     return model
 
 

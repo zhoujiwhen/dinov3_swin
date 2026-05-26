@@ -1,0 +1,92 @@
+MODEL:
+  META_ARCHITECTURE: FeatureDistillationMetaArch
+  DEVICE: cuda
+  WEIGHTS: ''
+  DTYPE: float32
+
+feature_distill:  # modified by zhoujiwen
+  teacher_arch: vit_large
+  teacher_patch_size: 16
+  teacher_checkpoint: checkpoints/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+  cls_loss_weight: 1.0
+  patch_loss_weight: 1.0
+  masked_patch_loss_weight: 1.0
+  val_dataset_path: FlatJPG:split=VAL:root=/mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/:seed=42:train_ratio=0.9
+  val_period_iterations: 2250
+  val_max_batches: 128
+  early_stopping_patience: 20
+
+student:
+  arch: swin_base
+  patch_size: 4
+  drop_path_rate: 0.2
+  qkv_bias: true
+  norm_layer: layernorm
+  n_storage_tokens: 0
+  untie_cls_and_patch_norms: true
+  untie_global_and_local_cls_norm: false
+
+dino:
+  koleo_loss_weight: 0.1
+
+ibot:
+  mask_sample_probability: 0.5
+  mask_ratio_min_max: [0.1, 0.5]
+  mask_random_circular_shift: false
+
+gram:
+  use_loss: false
+
+crops:
+  global_crops_size: 64
+  local_crops_size: 48
+  global_crops_scale: [0.6, 1.0]
+  local_crops_scale: [0.35, 0.8]
+  local_crops_number: 8
+  rgb_mean: [0.485, 0.456, 0.406]
+  rgb_std: [0.229, 0.224, 0.225]
+  horizontal_flips: true
+
+train:
+  dataset_path: FlatJPG:split=TRAIN:root=/mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/:seed=42:train_ratio=0.9
+  batch_size_per_gpu: 8
+  output_dir: outputs/swin_base_vitl16_feature_distill
+  num_workers: 4
+  OFFICIAL_EPOCH_LENGTH: 2250
+  seed: 42
+  cache_dataset: false
+  centering: sinkhorn_knopp
+  checkpointing: true
+  compile: false
+
+optim:
+  epochs: 3000
+  optimizer: adamw
+  lr: 5.0e-5
+  min_lr: 1.0e-6
+  warmup_epochs: 10
+  weight_decay: 0.05
+  weight_decay_end: 0.2
+  layerwise_decay: 0.9
+  clip_grad: 3.0
+  freeze_last_layer_epochs: 0
+
+teacher:
+  momentum_teacher: 0.996
+  final_momentum_teacher: 1.0
+  warmup_teacher_temp: 0.04
+  teacher_temp: 0.07
+  warmup_teacher_temp_epochs: 10
+
+evaluation:
+  eval_period_iterations: 0
+
+checkpointing:
+  period: 2250
+  max_to_keep: 5
+  keep_every: 22500
+
+compute_precision:
+  param_dtype: bf16
+  reduce_dtype: fp32
+  sharding_strategy: SHARD_GRAD_OP

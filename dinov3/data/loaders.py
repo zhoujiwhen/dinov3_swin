@@ -10,7 +10,7 @@ from typing import Any, Callable, List, Optional, TypeVar
 import torch
 from torch.utils.data import Sampler
 
-from .datasets import ADE20K, CocoCaptions, ImageNet, ImageNet22k, NYU
+from .datasets import ADE20K, CocoCaptions, FlatJPGDataset, ImageNet, ImageNet22k, NYU
 from .samplers import EpochSampler, InfiniteSampler, ShardedInfiniteSampler
 
 logger = logging.getLogger("dinov3")
@@ -51,8 +51,8 @@ def _parse_dataset_str(dataset_str: str):
 
     for token in tokens[1:]:
         key, value = token.split("=")
-        assert key in ("root", "extra", "split")
-        kwargs[key] = value
+        assert key in ("root", "extra", "split", "seed", "train_ratio")
+        kwargs[key] = int(value) if key == "seed" else float(value) if key == "train_ratio" else value
 
     if name == "ImageNet":
         class_ = ImageNet
@@ -72,6 +72,8 @@ def _parse_dataset_str(dataset_str: str):
         class_ = NYU
         if "split" in kwargs:
             kwargs["split"] = NYU.Split[kwargs["split"]]
+    elif name == "FlatJPG":  # modified by zhoujiwen
+        class_ = FlatJPGDataset
     else:
         raise ValueError(f'Unsupported dataset "{name}"')
 

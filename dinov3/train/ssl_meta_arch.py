@@ -17,7 +17,7 @@ from dinov3.configs import get_default_config
 from dinov3.data import DataAugmentationDINO
 from dinov3.fsdp.ac_compile_parallelize import ac_compile_parallelize
 from dinov3.layers.dino_head import DINOHead
-from dinov3.loss import DINOLoss, GramLoss, KoLeoLoss, KoLeoLossDistributed, iBOTPatchLoss
+from dinov3.loss import DINOLoss, KoLeoLoss, KoLeoLossDistributed, iBOTPatchLoss
 from dinov3.models import build_model_from_cfg
 from dinov3.train.cosine_lr_scheduler import linear_warmup_cosine_decay
 from dinov3.train.param_groups import fuse_params_groups, get_params_groups_with_decay_fsdp
@@ -48,16 +48,13 @@ class SSLMetaArch(nn.Module):
 
         student_model_dict = dict()
         teacher_model_dict = dict()
-        gram_model_dict = dict()
 
         student_backbone, teacher_backbone, embed_dim = build_model_from_cfg(cfg)
         torch.cuda.empty_cache()
         gc.collect()
-        gram_backbone, _ = build_model_from_cfg(cfg, only_teacher=True)
         logger.info(f"Number of parameters: {count_parameters(student_backbone)}")
         student_model_dict["backbone"] = student_backbone
         teacher_model_dict["backbone"] = teacher_backbone
-        gram_model_dict["backbone"] = gram_backbone
         logger.info(f"OPTIONS -- architecture : embed_dim: {embed_dim}")
 
         self.embed_dim = embed_dim  # D
@@ -163,8 +160,10 @@ class SSLMetaArch(nn.Module):
                 ),
             )
 
-        # Gram
-        self.gram_use_loss = self.cfg.gram.use_loss
+        # modified by zhoujiwen: Gram is intentionally disabled for all training modes in this fork.
+        # Keep the public config keys for compatibility, but never construct or
+        # evaluate Gram teachers/losses even if a config sets gram.use_loss=true.
+        self.gram_use_loss = False
         self.gram_ema_teacher = False
         self.has_gram_teacher = False
         self.gram_teacher_initialized = False
@@ -764,8 +763,8 @@ class SSLMetaArch(nn.Module):
             cfg.crops.local_crops_number,
             global_crops_size=cfg.crops.global_crops_size,
             local_crops_size=cfg.crops.local_crops_size,
-            gram_teacher_crops_size=cfg.crops.gram_teacher_crops_size,
-            gram_teacher_no_distortions=cfg.crops.gram_teacher_no_distortions,
+            gram_teacher_crops_size=None,  # modified by zhoujiwen: never generate Gram teacher crops.
+            gram_teacher_no_distortions=False,
             local_crops_subset_of_global_crops=cfg.crops.localcrops_subset_of_globalcrops,
             share_color_jitter=cfg.crops.share_color_jitter,
             horizontal_flips=cfg.crops.horizontal_flips,
