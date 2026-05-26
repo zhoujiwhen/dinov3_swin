@@ -5,8 +5,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONPATH="${PYTHONPATH:-.}:."
 export CUDA_VISIBLE_DEVICES=4  # modified by zhoujiwen: use GPU 4 by default.
-test -f checkpoints/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
-test -d /mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/
+
+echo "[feature-distill] workspace: $(pwd)"
+echo "[feature-distill] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+test -f checkpoints/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth || { echo "[feature-distill][ERROR] missing teacher checkpoint: checkpoints/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"; exit 1; }
+test -d /mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/ || { echo "[feature-distill][ERROR] missing dataset dir: /mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/"; exit 1; }
 
 python - <<'PY'
 import torch
