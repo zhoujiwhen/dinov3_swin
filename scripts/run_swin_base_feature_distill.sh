@@ -4,7 +4,7 @@ set -euo pipefail
 # modified by zhoujiwen: one-command launcher for A40 CUDA feature distillation.
 cd "$(dirname "$0")/.."
 export PYTHONPATH="${PYTHONPATH:-.}:."
-export CUDA_VISIBLE_DEVICES=4  # modified by zhoujiwen: use GPU 4 by default.
+export CUDA_VISIBLE_DEVICES=4,5,6,7  # modified by zhoujiwen: use GPUs 4-7 by default.
 
 echo "[feature-distill] workspace: $(pwd)"
 echo "[feature-distill] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
@@ -18,6 +18,6 @@ if not torch.cuda.is_available():
 print(f"CUDA devices: {torch.cuda.device_count()} | current: {torch.cuda.get_device_name(0)}")
 PY
 
-torchrun --standalone --nproc_per_node="${NPROC_PER_NODE:-1}" dinov3/train/train.py \
+torchrun --standalone --nproc_per_node="${NPROC_PER_NODE:-4}" dinov3/train/train.py \
   --config-file dinov3/configs/train/swin_base_feature_distill_vitl16.yaml \
   --output-dir outputs/swin_base_vitl16_feature_distill "$@"

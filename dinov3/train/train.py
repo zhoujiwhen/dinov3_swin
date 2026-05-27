@@ -472,10 +472,12 @@ def do_train(cfg, model, resume=False):
     feature_distill_enabled = cfg.MODEL.META_ARCHITECTURE == "FeatureDistillationMetaArch"  # modified by zhoujiwen
     val_loader = build_feature_val_data_loader_from_cfg(cfg, model) if feature_distill_enabled else None
     best_val_loss, bad_val_count = float("inf"), 0
-    csv_path = os.path.join(cfg.train.output_dir, "step_losses.csv")
+    csv_path = os.path.join(cfg.train.output_dir, "epoch_losses.csv")  # modified by zhoujiwen
+    csv_fields = ["epoch", "step", "total_loss", "cls_feature_loss", "patch_feature_loss", "masked_patch_feature_loss", "koleo_loss", "val_loss"]  # modified by zhoujiwen
+    epoch_loss_sums, epoch_loss_count = {k: 0.0 for k in csv_fields[2:-1]}, 0  # modified by zhoujiwen
     if feature_distill_enabled and distributed.is_subgroup_main_process() and not os.path.exists(csv_path):
         with open(csv_path, "w", newline="") as f:
-            csv.writer(f).writerow(["step", "total_loss", "val_loss"])
+            csv.writer(f).writerow(csv_fields)  # modified by zhoujiwen
 
     # Metric logging
     logger.info("Starting training from iteration %d", start_iter)
@@ -599,10 +601,14 @@ def do_train(cfg, model, resume=False):
         metric_logger.update(mom=mom)
         metric_logger.update(last_layer_lr=last_layer_lr)
         metric_logger.update(total_loss=total_loss, **metrics_dict)
-        val_loss_for_csv = ""
-        if feature_distill_enabled and (iteration + 1) % cfg.feature_distill.val_period_iterations == 0:
+        if feature_distill_enabled:
+            epoch_loss_count += 1  # modified by zhoujiwen
+            epoch_loss_sums["total_loss"] += float(total_loss.item())  # modified by zhoujiwen
+            for k in epoch_loss_sums.keys() - {"total_loss"}: epoch_loss_sums[k] += float(metrics_dict.get(k, torch.tensor(0.0, device=total_loss.device)).item())  # modified by zhoujiwen
+        if feature_distill_enabled and (iteration + 1) % OFFICIAL_EPOCH_LENGTH == 0:
+            early_stop = False  # modified by zhoujiwen
             val_loss = do_feature_validation(model, val_loader, cfg.feature_distill.val_max_batches)
-            val_loss_for_csv = float(val_loss.item())
+            val_loss_for_csv = float(val_loss.item())  # modified by zhoujiwen
             metric_logger.update(val_loss=val_loss)
             if val_loss_for_csv < best_val_loss:
                 best_val_loss, bad_val_count = val_loss_for_csv, 0
@@ -610,11 +616,14 @@ def do_train(cfg, model, resume=False):
             else:
                 bad_val_count += 1
             if bad_val_count >= cfg.feature_distill.early_stopping_patience:
+                early_stop = True  # modified by zhoujiwen
+            if distributed.is_subgroup_main_process():
+                with open(csv_path, "a", newline="") as f:
+                    csv.writer(f).writerow([(iteration + 1) // OFFICIAL_EPOCH_LENGTH, iteration, *[epoch_loss_sums[k] / max(epoch_loss_count, 1) for k in csv_fields[2:-1]], val_loss_for_csv])  # modified by zhoujiwen
+            epoch_loss_sums, epoch_loss_count = {k: 0.0 for k in csv_fields[2:-1]}, 0  # modified by zhoujiwen
+            if early_stop:
                 logger.info(f"Early stopping at iteration {iteration}: best val loss {best_val_loss:.6f}")
                 break
-        if feature_distill_enabled and distributed.is_subgroup_main_process():
-            with open(csv_path, "a", newline="") as f:
-                csv.writer(f).writerow([iteration, float(total_loss.item()), val_loss_for_csv])
 
         # Submit evaluation jobs
         if (

@@ -12,7 +12,7 @@ feature_distill:  # modified by zhoujiwen
   patch_loss_weight: 1.0
   masked_patch_loss_weight: 1.0
   val_dataset_path: FlatJPG:split=VAL:root=/mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/:seed=42:train_ratio=0.9
-  val_period_iterations: 2250
+  val_period_iterations: 2430
   val_max_batches: 128
   early_stopping_patience: 20
 
@@ -52,7 +52,7 @@ train:
   batch_size_per_gpu: 8
   output_dir: outputs/swin_base_vitl16_feature_distill
   num_workers: 4
-  OFFICIAL_EPOCH_LENGTH: 2250
+  OFFICIAL_EPOCH_LENGTH: 2430  # modified by zhoujiwen
   seed: 42
   cache_dataset: false
   centering: sinkhorn_knopp
@@ -82,7 +82,7 @@ evaluation:
   eval_period_iterations: 0
 
 checkpointing:
-  period: 2250
+  period: 2430  # modified by zhoujiwen
   max_to_keep: 5
   keep_every: 22500
 
