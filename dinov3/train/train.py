@@ -38,7 +38,7 @@ from dinov3.data import (
     make_dataset,
     CombinedDataLoader,
 )
-from dinov3.logging import MetricLogger, setup_logging
+from dinov3.logging import MetricLogger, SmoothedValue, setup_logging  # modified by zhoujiwen
 from dinov3.train.cosine_lr_scheduler import CosineScheduler, linear_warmup_cosine_decay
 from dinov3.train.multidist_meta_arch import MultiDistillationMetaArch
 from dinov3.train.feature_distill_meta_arch import FeatureDistillationMetaArch  # modified by zhoujiwen
@@ -483,6 +483,7 @@ def do_train(cfg, model, resume=False):
     logger.info("Starting training from iteration %d", start_iter)
     metrics_file = os.path.join(cfg.train.output_dir, "training_metrics.json")
     metric_logger = MetricLogger(delimiter="  ", output_file=metrics_file)
+    if feature_distill_enabled: metric_logger.add_meter("epoch", SmoothedValue(fmt="{value:.0f}"))  # modified by zhoujiwen
     # Manual garbage collection
     gc.disable()
     gc.collect()
@@ -597,6 +598,7 @@ def do_train(cfg, model, resume=False):
 
         # Log metrics
         metric_logger.update(lr=lr)
+        if feature_distill_enabled: metric_logger.update(epoch=iteration // OFFICIAL_EPOCH_LENGTH + 1)  # modified by zhoujiwen
         metric_logger.update(wd=wd)
         metric_logger.update(mom=mom)
         metric_logger.update(last_layer_lr=last_layer_lr)
