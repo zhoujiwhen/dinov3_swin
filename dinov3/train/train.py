@@ -404,7 +404,7 @@ def build_feature_val_data_loader_from_cfg(cfg, model):  # modified by zhoujiwen
         mask_generator=MaskingGenerator(input_size=(img_size // (cfg_val.student.patch_size * 8), img_size // (cfg_val.student.patch_size * 8)), max_num_patches=0.5 * n_tokens),
         random_circular_shift=cfg_val.ibot.mask_random_circular_shift,
     )
-    return make_data_loader(dataset=dataset, batch_size=cfg_val.train.batch_size_per_gpu, num_workers=cfg_val.train.num_workers, sampler_type=SamplerType.EPOCH, drop_last=True, collate_fn=collate_fn)
+    return make_data_loader(dataset=dataset, batch_size=cfg_val.train.batch_size_per_gpu, num_workers=cfg_val.train.num_workers, sampler_type=SamplerType.EPOCH, drop_last=False, collate_fn=collate_fn)  # modified by zhoujiwen
 
 
 @torch.no_grad()
