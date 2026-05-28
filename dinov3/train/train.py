@@ -41,7 +41,7 @@ from dinov3.data import (
 from dinov3.logging import MetricLogger, SmoothedValue, setup_logging  # modified by zhoujiwen
 from dinov3.train.cosine_lr_scheduler import CosineScheduler, linear_warmup_cosine_decay
 from dinov3.train.multidist_meta_arch import MultiDistillationMetaArch
-from dinov3.train.feature_distill_meta_arch import FeatureDistillationMetaArch  # modified by zhoujiwen
+from dinov3.train.ssl_feature_distill_meta_arch import SSLFeatureDistillationMetaArch  # modified by zhoujiwen
 from dinov3.train.ssl_meta_arch import SSLMetaArch
 from dinov3.models.swin_transformer import SwinTransformer
 
@@ -469,11 +469,11 @@ def do_train(cfg, model, resume=False):
         model=model,
         start_iter=start_iter,
     )
-    feature_distill_enabled = cfg.MODEL.META_ARCHITECTURE == "FeatureDistillationMetaArch"  # modified by zhoujiwen
+    feature_distill_enabled = cfg.MODEL.META_ARCHITECTURE == "SSLFeatureDistillationMetaArch"  # modified by zhoujiwen
     val_loader = build_feature_val_data_loader_from_cfg(cfg, model) if feature_distill_enabled else None
     best_val_loss, bad_val_count = float("inf"), 0
     csv_path = os.path.join(cfg.train.output_dir, "epoch_losses.csv")  # modified by zhoujiwen
-    csv_fields = ["epoch", "step", "total_loss", "cls_feature_loss", "patch_feature_loss", "masked_patch_feature_loss", "koleo_loss", "val_loss"]  # modified by zhoujiwen
+    csv_fields = ["epoch", "step", "total_loss", "dino_loss", "ibot_loss", "koleo_loss", "gram_loss", "val_loss"]  # modified by zhoujiwen
     epoch_loss_sums, epoch_loss_count = {k: 0.0 for k in csv_fields[2:-1]}, 0  # modified by zhoujiwen
     if feature_distill_enabled and distributed.is_subgroup_main_process() and not os.path.exists(csv_path):
         with open(csv_path, "w", newline="") as f:
@@ -680,7 +680,7 @@ def main(argv=None):
     meta_arch = {
         "SSLMetaArch": SSLMetaArch,
         "MultiDistillationMetaArch": MultiDistillationMetaArch,
-        "FeatureDistillationMetaArch": FeatureDistillationMetaArch,  # modified by zhoujiwen
+        "SSLFeatureDistillationMetaArch": SSLFeatureDistillationMetaArch,  # modified by zhoujiwen
     }.get(cfg.MODEL.META_ARCHITECTURE, None)
     if meta_arch is None:
         raise ValueError(f"Unknown MODEL.META_ARCHITECTURE {cfg.MODEL.META_ARCHITECTURE}")

@@ -1,5 +1,5 @@
 MODEL:
-  META_ARCHITECTURE: FeatureDistillationMetaArch
+  META_ARCHITECTURE: SSLFeatureDistillationMetaArch  # modified by zhoujiwen
   DEVICE: cuda
   WEIGHTS: ''
   DTYPE: float32
@@ -8,9 +8,6 @@ feature_distill:  # modified by zhoujiwen
   teacher_arch: vit_large
   teacher_patch_size: 16
   teacher_checkpoint: checkpoints/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
-  cls_loss_weight: 1.0
-  patch_loss_weight: 1.0
-  masked_patch_loss_weight: 1.0
   val_dataset_path: FlatJPG:split=VAL:root=/mnt/ht2-nas2/00-model/00-hulj/Dinov3/workspace/data_eurosat_train/train/pseudo/:seed=42:train_ratio=0.9
   val_period_iterations: 8  # modified by zhoujiwen
   val_max_batches: 128
@@ -27,15 +24,20 @@ student:
   untie_global_and_local_cls_norm: false
 
 dino:
+  loss_weight: 1.0  # modified by zhoujiwen
   koleo_loss_weight: 0.1
 
 ibot:
+  loss_weight: 1.0  # modified by zhoujiwen
   mask_sample_probability: 0.5
   mask_ratio_min_max: [0.1, 0.5]
   mask_random_circular_shift: false
 
 gram:
-  use_loss: false
+  use_loss: true  # modified by zhoujiwen
+  loss_weight: 1.0  # modified by zhoujiwen
+  tokens_used: all  # modified by zhoujiwen
+  img_level: true  # modified by zhoujiwen
 
 crops:
   global_crops_size: 64
